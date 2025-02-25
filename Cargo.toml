@@ -1,0 +1,11 @@
+[package]
+name = "capnpc-ocaml-decoder"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+capnp = "0.20" # Note this is a different library than capnp*c*
+lazy_static = "1.5.0"
+
+[build-dependencies]
+capnpc = "0.20"
