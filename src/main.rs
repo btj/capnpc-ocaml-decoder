@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use capnp::schema_capnp;
+use capnp::schema_capnp::code_generator_request::requested_file;
 use capnp::schema_capnp::field::NO_DISCRIMINANT;
 
 const OCAML_KEYWORDS: [&str; 56] = [
@@ -128,14 +129,12 @@ fn print_type_decoder(
     match type_.which().unwrap() {
         schema_capnp::type_::Struct(struct_) => {
             let type_id = struct_.get_type_id();
-            let type_name =
-                node_name_map.get(&type_id).unwrap();
+            let type_name = node_name_map.get(&type_id).unwrap();
             write!(decoder, "decode_{}", type_name).unwrap();
         }
         schema_capnp::type_::Enum(enum_) => {
             let type_id = enum_.get_type_id();
-            let type_name =
-                node_name_map.get(&type_id).unwrap();
+            let type_name = node_name_map.get(&type_id).unwrap();
             write!(decoder, "decode_{}", type_name).unwrap();
         }
         schema_capnp::type_::AnyPointer(any_pointer) => match any_pointer.which().unwrap() {
@@ -145,7 +144,8 @@ fn print_type_decoder(
                     "decode_{}",
                     param_env.unwrap().get(parameter.get_scope_id())
                         [parameter.get_parameter_index() as usize]
-                ).unwrap();
+                )
+                .unwrap();
             }
             _ => todo!(),
         },
@@ -182,7 +182,12 @@ fn print_type_decoding(
         }
         schema_capnp::type_::List(list) => {
             write!(decoder, "Capnp.Array.map_list {} ~f:", reader).unwrap();
-            print_type_decoder(decoder, node_name_map, param_env, list.get_element_type().unwrap());
+            print_type_decoder(
+                decoder,
+                node_name_map,
+                param_env,
+                list.get_element_type().unwrap(),
+            );
         }
         schema_capnp::type_::Enum(enum_) => {
             write!(
@@ -210,7 +215,12 @@ fn print_type_decoding(
                                 match binding.which().unwrap() {
                                     schema_capnp::brand::binding::Which::Type(t) => {
                                         write!(decoder, " ").unwrap();
-                                        print_type_decoder(decoder, node_name_map, param_env, t.unwrap());
+                                        print_type_decoder(
+                                            decoder,
+                                            node_name_map,
+                                            param_env,
+                                            t.unwrap(),
+                                        );
                                     }
                                     _ => todo!(),
                                 }
@@ -220,11 +230,7 @@ fn print_type_decoding(
                     }
                 }
             }
-            write!(
-                decoder,
-                " {}",
-                reader
-            ).unwrap();
+            write!(decoder, " {}", reader).unwrap();
         }
         schema_capnp::type_::AnyPointer(any_pointer) => match any_pointer.which().unwrap() {
             schema_capnp::type_::any_pointer::Parameter(parameter) => {
@@ -234,7 +240,8 @@ fn print_type_decoding(
                     param_env.unwrap().get(parameter.get_scope_id())
                         [parameter.get_parameter_index() as usize],
                     reader
-                ).unwrap();
+                )
+                .unwrap();
             }
             _ => todo!(),
         },
@@ -344,7 +351,9 @@ fn enter_nested_nodes(
 ) {
     for nested_node in nested_nodes.iter() {
         let nested_id = nested_node.get_id();
-        let nested_name = escape_keyword(pascal_to_snake(nested_node.get_name().unwrap().to_str().unwrap()));
+        let nested_name = escape_keyword(pascal_to_snake(
+            nested_node.get_name().unwrap().to_str().unwrap(),
+        ));
         let nested_qualifier = if qualifier.is_empty() {
             nested_name.to_string()
         } else {
@@ -412,13 +421,19 @@ fn print_nested_nodes(
                             print!("'{} ", name);
                             write!(generic_args, "'{} ", name).unwrap();
                             write!(decoder, " 'r{} '{}", name, name).unwrap();
-                            write!(fun_param_types, "('r{} S.reader_t -> '{}) -> ", name, name).unwrap();
+                            write!(fun_param_types, "('r{} S.reader_t -> '{}) -> ", name, name)
+                                .unwrap();
                             write!(fun_args, " decode_{}", name).unwrap();
-    
+
                             param_env.parameters.push(name);
                         }
                         print!("{} =\n", name);
-                        write!(decoder, ". {}{}.t -> {}{} = fun{} r ->\n", fun_param_types, nested_reader_path, generic_args, name, fun_args).unwrap();
+                        write!(
+                            decoder,
+                            ". {}{}.t -> {}{} = fun{} r ->\n",
+                            fun_param_types, nested_reader_path, generic_args, name, fun_args
+                        )
+                        .unwrap();
                     } else {
                         print!("{} =\n", name);
                         write!(decoder, " r: {} =\n", name).unwrap();
@@ -471,7 +486,8 @@ fn print_nested_nodes(
                                     match group_node.which().unwrap() {
                                         schema_capnp::node::Struct(struct_node) => {
                                             print!(" of {{");
-                                            write!(decoder, " r' -> {} {{", capitalized_name).unwrap();
+                                            write!(decoder, " r' -> {} {{", capitalized_name)
+                                                .unwrap();
                                             let mut is_first_field = true;
                                             let fields = struct_node.get_fields().unwrap();
                                             for field in fields.iter() {
@@ -486,10 +502,15 @@ fn print_nested_nodes(
                                                             write!(decoder, "; ").unwrap();
                                                         }
                                                         let snake_name = pascal_to_snake(name);
-                                                        let escaped_snake_name = escape_keyword(snake_name.clone());
+                                                        let escaped_snake_name =
+                                                            escape_keyword(snake_name.clone());
                                                         print!("{}: ", escaped_snake_name);
-                                                        write!(decoder, "{} = ", escaped_snake_name)
-                                                            .unwrap();
+                                                        write!(
+                                                            decoder,
+                                                            "{} = ",
+                                                            escaped_snake_name
+                                                        )
+                                                        .unwrap();
                                                         let type_ = slot.get_type().unwrap();
                                                         print_type(
                                                             &node_name_map,
@@ -503,7 +524,9 @@ fn print_nested_nodes(
                                                             type_,
                                                             &format!(
                                                                 "({}.{}.{}_get r')",
-                                                                nested_reader_path, capitalized_name, snake_name
+                                                                nested_reader_path,
+                                                                capitalized_name,
+                                                                snake_name
                                                             ),
                                                         );
                                                     }
@@ -518,7 +541,11 @@ fn print_nested_nodes(
                                 }
                             }
                         }
-                        write!(decoder, "  | Undefined _ -> failwith \"Undefined discriminant\"\n").unwrap();
+                        write!(
+                            decoder,
+                            "  | Undefined _ -> failwith \"Undefined discriminant\"\n"
+                        )
+                        .unwrap();
                     } else {
                         print!("  {{");
                         write!(decoder, "  {{").unwrap();
@@ -591,11 +618,71 @@ fn print_nested_nodes(
                     )
                     .unwrap();
                 }
-                write!(decoder, "\n  | Undefined _ -> failwith \"Undefined enumerant\"").unwrap();
+                write!(
+                    decoder,
+                    "\n  | Undefined _ -> failwith \"Undefined enumerant\""
+                )
+                .unwrap();
             }
             _ => todo!(),
         }
     }
+}
+
+fn process_requested_file(
+    node_map: &HashMap<u64, schema_capnp::node::Reader<'_>>,
+    requested_file: requested_file::Reader,
+) {
+    let mut decoder = String::new();
+    // Create a map of node id to node name
+    let mut node_name_map = std::collections::HashMap::new();
+    let id = requested_file.get_id();
+    let node = node_map.get(&id).unwrap();
+    assert!(match node.which().unwrap() {
+        schema_capnp::node::File(()) => true,
+        _ => false,
+    });
+    let nested_nodes = node.get_nested_nodes().unwrap();
+    enter_nested_nodes(&node_map, &mut node_name_map, "", nested_nodes);
+
+    let mut is_first_type = true;
+    let id = requested_file.get_id();
+    let filename = requested_file.get_filename().unwrap().to_str().unwrap();
+    let basename = std::path::Path::new(filename)
+        .file_stem()
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let capitalized_basename = basename
+        .chars()
+        .next()
+        .unwrap()
+        .to_uppercase()
+        .collect::<String>()
+        + &basename[1..];
+    let node = node_map.get(&id).unwrap();
+    assert!(match node.which().unwrap() {
+        schema_capnp::node::File(()) => true,
+        _ => false,
+    });
+    let nested_nodes = node.get_nested_nodes().unwrap();
+    print_nested_nodes(
+        &mut decoder,
+        &node_map,
+        &node_name_map,
+        &mut is_first_type,
+        "R",
+        nested_nodes,
+    );
+    println!();
+    println!();
+    println!(
+        "module S = {}.Make (Capnp.BytesMessage)",
+        capitalized_basename
+    );
+    println!("module R = S.Reader");
+    println!();
+    println!("{}", decoder);
 }
 
 fn main() {
@@ -615,44 +702,8 @@ fn main() {
         let id = node.get_id();
         node_map.insert(id, node);
     }
-    let mut decoder = String::new();
     let requested_files = code_generator_request.get_requested_files().unwrap();
-    // Create a map of node id to node name
-    let mut node_name_map = std::collections::HashMap::new();
     for requested_file in requested_files.iter() {
-        let id = requested_file.get_id();
-        let node = node_map.get(&id).unwrap();
-        assert!(match node.which().unwrap() {
-            schema_capnp::node::File(()) => true,
-            _ => false,
-        });
-        let nested_nodes = node.get_nested_nodes().unwrap();
-        enter_nested_nodes(&node_map, &mut node_name_map, "", nested_nodes);
+        process_requested_file(&node_map, requested_file);
     }
-    let mut is_first_type = true;
-    for requested_file in requested_files.iter() {
-        let id = requested_file.get_id();
-        // let filename = requested_file.get_filename().unwrap();
-        // println!("Requested file: id={}, filename={}", id, filename);
-        let node = node_map.get(&id).unwrap();
-        assert!(match node.which().unwrap() {
-            schema_capnp::node::File(()) => true,
-            _ => false,
-        });
-        let nested_nodes = node.get_nested_nodes().unwrap();
-        print_nested_nodes(
-            &mut decoder,
-            &node_map,
-            &node_name_map,
-            &mut is_first_type,
-            "R",
-            nested_nodes,
-        );
-    }
-    println!();
-    println!();
-    println!("module S = Vf_mir.Make (Capnp.BytesMessage)");
-    println!("module R = S.Reader");
-    println!();
-    println!("{}", decoder);
 }
