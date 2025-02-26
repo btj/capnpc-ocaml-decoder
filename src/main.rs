@@ -302,7 +302,7 @@ fn print_type<'a>(
             print!(" list");
         }
         schema_capnp::type_::Enum(enum_) => {
-            print!("{}", node_name_map.get(&enum_.get_type_id()).unwrap());
+            print!("{}", escape_keyword(node_name_map.get(&enum_.get_type_id()).unwrap().clone()));
         }
         schema_capnp::type_::Struct(struct_) => {
             if struct_.has_brand() {
@@ -325,7 +325,7 @@ fn print_type<'a>(
                     }
                 }
             }
-            print!("{}", node_name_map.get(&struct_.get_type_id()).unwrap());
+            print!("{}", escape_keyword(node_name_map.get(&struct_.get_type_id()).unwrap().clone()));
         }
         schema_capnp::type_::Interface(interface) => {
             print!("{}", interface.get_type_id());
@@ -351,9 +351,9 @@ fn enter_nested_nodes(
 ) {
     for nested_node in nested_nodes.iter() {
         let nested_id = nested_node.get_id();
-        let nested_name = escape_keyword(pascal_to_snake(
+        let nested_name = pascal_to_snake(
             nested_node.get_name().unwrap().to_str().unwrap(),
-        ));
+        );
         let nested_qualifier = if qualifier.is_empty() {
             nested_name.to_string()
         } else {
@@ -404,6 +404,7 @@ fn print_nested_nodes(
                         write!(decoder, "\nand ").unwrap();
                     }
                     let name = node_name_map.get(&nested_id).unwrap();
+                    let escaped_name = escape_keyword(name.clone());
                     write!(decoder, "decode_{}", name).unwrap();
                     let mut param_env = ParamEnv {
                         scope_id: nested_id,
@@ -427,16 +428,16 @@ fn print_nested_nodes(
 
                             param_env.parameters.push(name);
                         }
-                        print!("{} =\n", name);
+                        print!("{} =\n", escaped_name);
                         write!(
                             decoder,
                             ". {}{}.t -> {}{} = fun{} r ->\n",
-                            fun_param_types, nested_reader_path, generic_args, name, fun_args
+                            fun_param_types, nested_reader_path, generic_args, escaped_name, fun_args
                         )
                         .unwrap();
                     } else {
-                        print!("{} =\n", name);
-                        write!(decoder, " r: {} =\n", name).unwrap();
+                        print!("{} =\n", escaped_name);
+                        write!(decoder, " r: {} =\n", escaped_name).unwrap();
                     }
 
                     let discriminant_count = struct_node.get_discriminant_count();
@@ -686,8 +687,6 @@ fn process_requested_file(
 }
 
 fn main() {
-    // Print message to standard error
-    eprintln!("Reading code generator request from stdin...");
     let stdin = ::std::io::stdin();
     let message_reader =
         capnp::serialize::read_message(&mut stdin.lock(), ::capnp::message::ReaderOptions::new())
